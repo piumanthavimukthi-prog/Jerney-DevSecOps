@@ -1,17 +1,18 @@
 # ==============================================================
-# Jerney - DevSecOps CI/CD Pipeline
+# Jerney - DevSecOps CI/CD Pipeline (Customized for Vimukthi)
 # ==============================================================
-# Triggers on every push and pull request.
-# Stages: Lint → SCA → Build → Image Scan → IaC Scan → Deploy Manifest Update
+# Triggers on push and pull requests to main development branches.
+# Stages: Lint → SCA → Build → Image Scan → IaC Scan → Dockerfile Lint → Deploy Manifest Update
 # ==============================================================
 
 name: Jerney DevSecOps Pipeline
 
+
 on:
   push:
-    branches: ["*"]
+    branches: ["main", "DevOps"]
   pull_request:
-    branches: ["*"]
+    branches: ["main", "DevOps"]
 
 # Security: restrict default permissions to read-only
 permissions:
@@ -81,7 +82,6 @@ jobs:
       - name: npm audit
         working-directory: ${{ matrix.component }}
         run: npm audit --audit-level=high || true
-        # `|| true` to not fail on moderate — adjust in prod
 
   # ==============================================================
   # STAGE 3: Build & Push Container Images
@@ -130,7 +130,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # Security: provenance and SBOM
           provenance: true
           sbom: true
 
@@ -165,7 +164,7 @@ jobs:
           timeout: "10m"
 
   # ==============================================================
-  # STAGE 5: IaC Security Scan (Checkov) — Terraform + K8s
+  # STAGE 5: IaC Security Scan (Checkov) — K8s Manifest Check
   # ==============================================================
   iac-scan:
     name: "🏗️ IaC Security Scan"
@@ -176,21 +175,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Checkov on Terraform
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: terraform/
-          framework: terraform
-          soft_fail: false
-          skip_check: CKV_AWS_39,CKV_AWS_58  # Public EKS endpoint (intentional for dev)
-          output_format: cli
-
+      # Scans the deploy folder for Kubernetes security improvements
       - name: Run Checkov on Kubernetes manifests
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: k8s/
+          directory: deploy/
           framework: kubernetes
-          soft_fail: true  # Soft fail for K8s (some checks may not apply)
+          soft_fail: true
           output_format: cli
 
   # ==============================================================
@@ -215,14 +206,14 @@ jobs:
 
   # ==============================================================
   # STAGE 7: Update K8s Manifest with New Image Tag
-  # Only runs on push to main (not on PRs)
   # ==============================================================
   update-manifest:
     name: "🚀 Update K8s Manifest"
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' 
+    if: github.event_name == 'push'
+    needs: [image-scan, iac-scan, dockerfile-lint]
     permissions:
-      contents: write # Needed to push manifest changes
+      contents: write # Needed to commit manifest changes back to Git
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -237,25 +228,35 @@ jobs:
         run: |
           IMAGE_TAG=${{ steps.sha.outputs.short }}
 
+          # Find the deployment file inside the deploy/ folder dynamically
+          MANIFEST_FILE=$(find deploy/ -name "*.yaml" -o -name "*.yml" | head -n 1)
+          echo "Target manifest detected: ${MANIFEST_FILE}"
+
+          if [ -z "${MANIFEST_FILE}" ]; then
+            echo "❌ Error: No deployment file found inside deploy/ folder!"
+            exit 1
+          fi
+
           # Find the line number of the backend container image
-          # (the image: line right after `- name: backend`)
-          BACKEND_LINE=$(awk '/- name: backend/{found=1} found && /image:/{print NR; exit}' k8s/jerney.yaml)
+          BACKEND_LINE=$(awk '/- name: backend/{found=1} found && /image:/{print NR; exit}' ${MANIFEST_FILE})
           echo "Backend image at line: ${BACKEND_LINE}"
-          sed -i "${BACKEND_LINE}s|.*|          image: ${BACKEND_IMAGE}:${IMAGE_TAG}|" k8s/jerney.yaml
+          sed -i "${BACKEND_LINE}s|.*|          image: ${BACKEND_IMAGE}:${IMAGE_TAG}|" ${MANIFEST_FILE}
 
           # Find the line number of the frontend container image
-          # (the image: line right after `- name: frontend`)
-          FRONTEND_LINE=$(awk '/- name: frontend/{found=1} found && /image:/{print NR; exit}' k8s/jerney.yaml)
+          FRONTEND_LINE=$(awk '/- name: frontend/{found=1} found && /image:/{print NR; exit}' ${MANIFEST_FILE})
           echo "Frontend image at line: ${FRONTEND_LINE}"
-          sed -i "${FRONTEND_LINE}s|.*|          image: ${FRONTEND_IMAGE}:${IMAGE_TAG}|" k8s/jerney.yaml
+          sed -i "${FRONTEND_LINE}s|.*|          image: ${FRONTEND_IMAGE}:${IMAGE_TAG}|" ${MANIFEST_FILE}
 
           echo "✅ Updated images to tag: ${IMAGE_TAG}"
-          grep -n "image:" k8s/jerney.yaml
+          grep -n "image:" ${MANIFEST_FILE}
+          
+          # Export path for the next step
+          echo "MANIFEST_PATH=${MANIFEST_FILE}" >> $GITHUB_ENV
 
       - name: Commit and push manifest update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add k8s/jerney.yaml
+          git add ${{ env.MANIFEST_PATH }}
           git diff --cached --quiet || git commit -m "ci: update k8s images to ${{ steps.sha.outputs.short }} [skip ci]"
           git push

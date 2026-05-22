@@ -39,11 +39,11 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: "${{ matrix.component }}/package-lock.json"
+          cache-dependency-path: "${{ matrix.component }}/package.json"
 
       - name: Install dependencies
         working-directory: ${{ matrix.component }}
-        run: npm ci
+        run: npm install
 
       - name: Run ESLint
         working-directory: ${{ matrix.component }}
@@ -68,11 +68,11 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: "${{ matrix.component }}/package-lock.json"
+          cache-dependency-path: "${{ matrix.component }}/package.json"
 
       - name: Install dependencies
         working-directory: ${{ matrix.component }}
-        run: npm ci
+        run: npm install
 
       - name: npm audit
         working-directory: ${{ matrix.component }}
@@ -162,7 +162,7 @@ jobs:
       - name: Run Checkov on Kubernetes manifests
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: deploy/
+          directory: k8s/
           framework: kubernetes
           soft_fail: true
 
@@ -207,7 +207,7 @@ jobs:
       - name: Update K8s manifest with new image tags
         run: |
           IMAGE_TAG=${{ steps.sha.outputs.short }}
-          MANIFEST_FILE="deploy/jerney.yaml"
+          MANIFEST_FILE="k8s/jerney.yaml"
           
           echo "Updating deployment image configurations in ${MANIFEST_FILE}..."
           
@@ -224,6 +224,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add deploy/jerney.yaml
+          git add k8s/jerney.yaml
           git diff --cached --quiet || git commit -m "ci: update k8s images to ${{ steps.sha.outputs.short }} [skip ci]"
-          git push origin devops# Force run trigger v5
+          git push origin devops

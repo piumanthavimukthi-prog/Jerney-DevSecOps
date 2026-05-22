@@ -1,5 +1,5 @@
 # ==============================================================
-# Jerney - DevSecOps CI/CD Pipeline (Customized for Vimukthi)
+# Jerney - DevSecOps CI/CD Pipeline
 # ==============================================================
 
 name: Jerney DevSecOps Pipeline
@@ -50,7 +50,7 @@ jobs:
         run: npm run lint || echo "Lint warnings bypass"
 
   # ==============================================================
-  # STAGE 2: Software Composition Analysis (SCA) — Dependency Audit
+  # STAGE 2: Software Composition Analysis (SCA)
   # ==============================================================
   sca:
     name: "🛡️ Dependency Audit"
@@ -211,10 +211,10 @@ jobs:
           
           echo "Updating deployment image configurations in ${MANIFEST_FILE}..."
           
-          # Clean, un-breakable global replacement targeting the specific repository prefix
+          # Global replacement targeting the specific repository container path
           sed -i "s|image: ghcr.io/[^:]*:latest|image: ghcr.io/${{ github.repository }}/jerney-backend:${IMAGE_TAG}|g" ${MANIFEST_FILE}
           
-          # Force adjust frontend matching token
+          # Force adjust frontend matching token position
           sed -i "s|jerney-backend:${IMAGE_TAG}|jerney-frontend:${IMAGE_TAG}|2" ${MANIFEST_FILE}
           
           echo "✅ Explicit Manifest Output Validation:"

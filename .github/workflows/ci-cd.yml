@@ -149,7 +149,7 @@ jobs:
         run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           image-ref: "ghcr.io/${{ github.repository }}/jerney-${{ matrix.component }}:${{ steps.sha.outputs.short }}"
           format: "table"

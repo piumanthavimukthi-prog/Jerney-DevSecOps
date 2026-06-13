@@ -22,7 +22,7 @@ COPY src/ ./src/
 # Security: own files by non-root user
 RUN chown -R appuser:appgroup /app
 
-USER appuser
+
 
 EXPOSE 5000
 

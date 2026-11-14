@@ -127,7 +127,11 @@ jobs:
   # ==============================================================
   # STAGE 4: Container Image Scanning (Trivy)
   # ==============================================================
-  
+  image-scan:
+    name: "🔬 Scan ${{ matrix.component }} Image"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: build
     strategy:
       matrix:
         component: [backend, frontend]

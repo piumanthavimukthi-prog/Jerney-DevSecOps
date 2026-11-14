@@ -153,7 +153,24 @@ jobs:
           severity: "CRITICAL,HIGH"
 
   # ==============================================================
- 
+  # STAGE 5: IaC Security Scan (Checkov)
+  # ==============================================================
+  iac-scan:
+    name: "🏗️ IaC Security Scan"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: lint
+    if: github.ref == 'refs/heads/devops'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Checkov
+        run: pip install checkov==2.3.360 --break-system-packages
+
+      - name: Run Checkov on Kubernetes manifests
+        run: checkov -d k8s/ --soft-fail || true
+
   # ==============================================================
   # STAGE 6: Dockerfile Lint (Hadolint)
   # ==============================================================
